@@ -1,66 +1,55 @@
-
-// (c) Copyright 2010-2012 MCQN Ltd.
-// Released under Apache License, version 2.0
-//
-// Simple example to show how to use the HttpClient library
-// Get's the web page given at http://<kHostname><kPath> and
-// outputs the content to the serial port
+//MD_PAROLA version 3.5.6
+//MD_MAX72XX version 3.3.0
 
 #include <SPI.h>
 #include <HttpClient.h>
 #include <Ethernet.h>
 #include <EthernetClient.h>
 #include <MD_Parola.h>
+#include <MD_MAX72xx.h>
 
+#define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 12
 #define CLK_PIN   7
 #define DATA_PIN  6
 #define CS_PIN    5
 
-MD_Parola P = MD_Parola(DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
+MD_Parola Parola = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
 
-// This example downloads the URL "http://arduino.cc/"
-
-// Name of the server we want to connect to
-const char kHostname[] = "34.214.8.105";
+const char kHostname[] = "192.168.88.186";
 int kPort = 8080;
-// Path to download (this is the bit after the hostname in the URL
-// that you want to download
 const char kPath[] = "/";
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
-// Number of milliseconds to wait without receiving any data before we give up
 const int kNetworkTimeout = 30*1000;
-// Number of milliseconds to wait if no data is available before trying again
 const int kNetworkDelay = 1000;
+
+IPAddress dnServer(192, 168, 88, 1);
+IPAddress gateway(192, 168, 88, 1);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress ip(192, 168, 88, 190);
 
 EthernetClient c;
 HttpClient http(c);
   
 void setup()
 {
-  // initialize serial communications at 9600 bps:
   Serial.begin(9600); 
   
-  P.begin();
-  
-  while (Ethernet.begin(mac) != 1)
-  {
-    Serial.println("Error getting IP address via DHCP, trying again...");
-    delay(15000);
-  }
+  Parola.begin();
+  Ethernet.begin(mac, ip, dnServer, gateway, subnet);
 
-  P.displayText("DHCP OK", LEFT, 25, 1000, SCROLL_LEFT, SCROLL_LEFT);
-  while (P.displayAnimate() == false) {
-    P.displayAnimate();
+  Parola.displayText("Ethernet ok", PA_CENTER, 25, 2000, PA_SCROLL_DOWN, PA_SCROLL_UP);
+  while (Parola.displayAnimate() == false) {
+    Parola.displayAnimate();
   }
 }
 
 void loop()
 {
-  Ethernet.maintain();
+  //Ethernet.maintain();
   
   char data[512];
   int pos = 0;
@@ -132,17 +121,21 @@ void loop()
   }
   else
   {
-    Serial.print("Connect failed: ");
-    Serial.println(err);
+    Parola.displayText("Connect failed", PA_CENTER, 25, 2000, PA_SCROLL_DOWN, PA_SCROLL_UP);
+    while (Parola.displayAnimate() == false) {
+      Parola.displayAnimate();
+    }
+    //Serial.print("Connect failed: ");
+    //Serial.println(err);
   }
   http.stop();
 
   // And just stop, now that we've tried a download
 
-  P.displayText(data, LEFT, 25, 0, SCROLL_LEFT, SCROLL_LEFT);
-  while (P.displayAnimate() == false) {
-    P.displayAnimate();
+  Parola.displayText(data, PA_LEFT, 25, 0, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
+  while (Parola.displayAnimate() == false) {
+    Parola.displayAnimate();
   }
   
-  delay(500);
+  delay(3000);
 }
