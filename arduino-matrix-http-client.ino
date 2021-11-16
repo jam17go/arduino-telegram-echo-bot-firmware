@@ -18,7 +18,8 @@
 #include <MD_Parola.h>
 #include <MD_MAX72xx.h>
 #include <HttpClient.h>
-#include <MemoryFree.h>
+
+#include "arduino_secrets.h"
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 12
@@ -26,51 +27,40 @@
 #define DATA_PIN  6
 #define CS_PIN    5
 
-MD_Parola Parola = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
+char kHostname[] = SERVER_HOSTNAME;
+char kPath[] = SERVER_PATH;
+int kPort = SERVER_PORT;
 
-const char kHostname[] = "192.168.88.186";
-const char kPath[] = "/uuid";
-int kPort = 80;
-
-
-// Number of milliseconds to wait without receiving any data before we give up
-const int kNetworkTimeout = 30*1000;
-// Number of milliseconds to wait if no data is available before trying again
-const int kNetworkDelay = 1000;
-
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-
+int kNetworkTimeout = 30*1000;
+int kNetworkDelay = 1000;
 int failsInaRow = 0;
 int resetPin = 8;
+
+byte mac[] = BOARD_MAC;
+
+MD_Parola Parola = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
 void reset() {
   digitalWrite(resetPin, LOW);
 }
 
-void setupNetwork()
-{
-
-}
-
-void setup()
+void setupResetPin()
 {
   digitalWrite(resetPin, HIGH);
   delay(200);
   pinMode(resetPin, OUTPUT);
   delay(200);
-  
-  Serial.begin(9600);
+}
 
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
+void animateDisplay()
+{
+  while (Parola.displayAnimate() == false) {
+    Parola.displayAnimate();
   }
+}
 
-  Serial.println("=== Arduino Echo Bot Firmware ===");
-
-  Parola.begin();
-  
-  // start the Ethernet connection:
-
+String setupEthernet()
+{
   Serial.println("Network setup started");
   
   while (Ethernet.begin(mac) != 1)
@@ -86,9 +76,7 @@ void setup()
 
     Parola.displayText("Ethernet hardware error. Check console output for details", PA_LEFT, 25, 0, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
     
-    while (Parola.displayAnimate() == false) {
-      Parola.displayAnimate();
-    }
+    animateDisplay();
 
     delay(10000);
   }
@@ -97,15 +85,30 @@ void setup()
   Serial.println(Ethernet.localIP());
 
   delay(2000);
- 
-  String iPStr = "My IP: " + ConvertIpAddress(Ethernet.localIP());
+
+  String ipAddress = ConvertIpAddress(Ethernet.localIP());
+
+  return ipAddress;
+}
+
+void setup()
+{
+  setupResetPin();
+    
+  Serial.begin(9600);
+  Serial.println("=== Arduino Echo Bot Firmware ===");
+
+  Parola.begin();
+
+  String ipAddress = setupEthernet();
+
+  String iPStr = "My IP: " + ipAddress;
+  
   char *pIpStr = iPStr.c_str();
 
   Parola.displayText(pIpStr, PA_LEFT, 25, 0, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
   
-  while (Parola.displayAnimate() == false) {
-    Parola.displayAnimate();
-  }
+  animateDisplay();
 }
 
 String ConvertIpAddress(IPAddress address)
@@ -117,37 +120,31 @@ String ConvertIpAddress(IPAddress address)
 }
 
 void loop()
-{ 
-  Serial.print("Fails in a row: " + String(failsInaRow));
-
-  if (failsInaRow >= 10) {    
+{
+  if (failsInaRow >= 10) {
     reset();
   }
-  
-  Ethernet.maintain();
 
-  char data[256];
-  int pos = 0;
-  memset(&data, 0, sizeof(data));
+  Ethernet.maintain();
+  EthernetClient ethClient;
+  HttpClient http(ethClient);
   
   int err = 0;
-  EthernetClient c;
-  HttpClient http(c);
+  int pos = 0;
+  char data[256];
+
+  memset(&data, 0, sizeof(data));
   
   err = http.get(kHostname, kPort, kPath);
   if (err == 0)
   {
-    Serial.println("startedRequest ok");
+    Serial.println("Request started ok");
 
     err = http.responseStatusCode();
     if (err >= 0)
     {
       Serial.print("Got status code: ");
       Serial.println(err);
-
-      // Usually you'd check that the response code is 200 or a
-      // similar "success" code (200-299) before carrying on,
-      // but we'll print out whatever response we get
 
       err = http.skipResponseHeaders();
       if (err >= 0)
@@ -186,6 +183,7 @@ void loop()
                 delay(kNetworkDelay);
             }
         }
+        Serial.println();
       }
       else
       {
@@ -194,13 +192,12 @@ void loop()
       }
     }
     else
-    {    
+    {
       Serial.print("Getting response failed: ");
       Serial.println(err);
     }
 
   failsInaRow = 0;
-  
   }
   else
   {
@@ -212,14 +209,9 @@ void loop()
 
   http.stop();
 
-  Serial.print("Data received: ");
-  Serial.print(data);
-  
   Parola.displayText(data, PA_LEFT, 25, 0, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
   
-  while (Parola.displayAnimate() == false) {
-    Parola.displayAnimate();
-  }
+  animateDisplay();
 
-  delay(500);
+  delay(5000);
 }
